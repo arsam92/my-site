@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Orbital – a gravity slingshot puzzle</title>
+<meta name="description" content="Slingshot a probe through gravity wells to reach the goal. 10 hand-made levels, a level editor, and share-by-link. Runs in your browser, no install.">
+<meta name="theme-color" content="#070b17">
+<meta property="og:title" content="Orbital – a gravity slingshot puzzle">
+<meta property="og:description" content="Bend your shot around planets. Build levels and share them with a single link.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23070b17'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%234cc9f0'/%3E%3Cellipse cx='32' cy='32' rx='26' ry='9' fill='none' stroke='%235eead4' stroke-width='3' transform='rotate(-25 32 32)'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #070b17;
+    --panel: rgba(12, 18, 38, .86);
+    --line: rgba(160, 190, 255, .18);
+    --text: #e8eeff;
+    --muted: #8d9ac0;
+    --accent: #5eead4;
+    --warm: #ffb454;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden;
+    -webkit-tap-highlight-color: transparent; }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; user-select: none; }
+  .hidden { display: none !important; }
+
+  button { font: inherit; color: var(--text); background: rgba(255,255,255,.07); border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px 14px; cursor: pointer; transition: background .15s, border-color .15s, transform .05s; }
+  button:hover:not(:disabled) { background: rgba(255,255,255,.14); border-color: rgba(160,190,255,.4); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); color: #04211d; border-color: transparent; font-weight: 650; }
+  button.primary:hover:not(:disabled) { background: #8ff3e3; }
+  button.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+  #hud { position: fixed; top: 0; left: 0; right: 0; height: 64px; display: flex; align-items: center;
+    justify-content: space-between; gap: 12px; padding: 0 16px; pointer-events: none; }
+  #hud > * { pointer-events: auto; }
+  .hud-left { display: flex; align-items: baseline; gap: 14px; }
+  #lvlName { font-weight: 650; letter-spacing: .02em; }
+  #shots { color: var(--warm); font-variant-numeric: tabular-nums; }
+  .hud-right { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+  #editbar { position: fixed; left: 0; right: 0; bottom: 0; min-height: 64px; display: flex; align-items: center;
+    justify-content: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: linear-gradient(transparent, rgba(5,7,15,.85) 40%); }
+  #edStatus { position: fixed; top: 16px; left: 0; right: 0; text-align: center; color: var(--muted); pointer-events: none; }
+  #edStatus.ok { color: var(--accent); }
+  .sep { width: 1px; height: 24px; background: var(--line); margin: 0 4px; }
+
+  #menu { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 24px 16px; overflow-y: auto; text-align: center; }
+  #menu h1 { margin: 0; font-size: clamp(40px, 9vw, 76px); letter-spacing: .28em; padding-left: .28em; font-weight: 800;
+    background: linear-gradient(90deg, #4cc9f0, #5eead4 55%, #f9c74f); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  #menu .tag { margin: 6px 0 22px; color: var(--muted); max-width: 520px; }
+  #levels { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; width: min(760px, 100%); }
+  .lvl { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; align-items: center;
+    text-align: left; padding: 10px 12px; background: var(--panel); }
+  .lvl .n { grid-row: 1 / 3; font-size: 22px; font-weight: 700; color: var(--accent); min-width: 1.4em; text-align: center; }
+  .lvl .nm { font-size: 14px; }
+  .lvl .st { font-size: 13px; color: var(--warm); letter-spacing: .15em; }
+  .menu-actions { margin-top: 20px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
+  #total { color: var(--muted); font-size: 14px; }
+  .how { margin-top: 18px; color: var(--muted); font-size: 13px; max-width: 560px; }
+  .how b { color: var(--text); font-weight: 600; }
+
+  #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(3,5,12,.45);
+    backdrop-filter: blur(3px); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 26px 30px; text-align: center; min-width: 260px; }
+  .card h2 { margin: 0 0 6px; font-size: 24px; }
+  #ovStars { font-size: 34px; color: var(--warm); letter-spacing: .12em; min-height: 1px; }
+  #ovText { margin: 6px 0 18px; color: var(--muted); }
+  #ovBtns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+  #hint { position: fixed; left: 0; right: 0; bottom: 18px; text-align: center; color: var(--muted); pointer-events: none; padding: 0 16px; }
+  #toast { position: fixed; top: 76px; left: 50%; transform: translate(-50%, -8px); background: var(--panel); border: 1px solid var(--line);
+    padding: 8px 16px; border-radius: 999px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; white-space: nowrap; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  #rotate { display: none; position: fixed; top: 72px; left: 50%; transform: translateX(-50%); background: var(--panel);
+    border: 1px solid var(--line); color: var(--muted); padding: 6px 14px; border-radius: 999px; font-size: 13px;
+    white-space: nowrap; pointer-events: none; }
+
+  @media (max-width: 640px) {
+    #hud { padding: 0 10px; }
+    button { padding: 7px 10px; font-size: 14px; }
+  }
+  @media (orientation: portrait) and (max-width: 700px) {
+    body.playing #rotate { display: block; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud" class="hidden">
+  <div class="hud-left"><span id="lvlName"></span><span id="shots"></span></div>
+  <div class="hud-right">
+    <button id="bEdit" class="hidden">Edit a copy</button>
+    <button id="bRetry" title="Restart (R)">Retry</button>
+    <button id="bPreview" title="Show a short preview of your shot">Preview: on</button>
+    <button id="bSound">Sound: on</button>
+    <button id="bBack" title="Esc">Menu</button>
+  </div>
+</div>
+
+<div id="edStatus" class="hidden"></div>
+<div id="editbar" class="hidden">
+  <button id="tPlanet" class="active">Planet</button>
+  <button id="tStart">Start</button>
+  <button id="tGoal">Goal</button>
+  <button id="tErase">Erase</button>
+  <button id="bPolarity">Gravity: attract</button>
+  <span class="sep"></span>
+  <button id="bClear">Clear</button>
+  <button id="bTest" class="primary">Test</button>
+  <button id="bShare" disabled>Share link</button>
+  <button id="bEdMenu">Menu</button>
+</div>
+
+<div id="menu">
+  <h1>ORBITAL</h1>
+  <p class="tag">Slingshot a probe through gravity wells and land it in the green ring.</p>
+  <div id="levels"></div>
+  <div class="menu-actions">
+    <button id="bCreate" class="primary">Build your own level</button>
+    <span id="total"></span>
+  </div>
+  <p class="how"><b>Drag back</b> from the glowing dock and release to launch. Blue, yellow and green planets <b>attract</b>, red ones <b>repel</b>. Fewer shots, more stars.</p>
+</div>
+
+<div id="overlay" class="hidden">
+  <div class="card">
+    <h2 id="ovTitle"></h2>
+    <div id="ovStars"></div>
+    <p id="ovText"></p>
+    <div id="ovBtns"></div>
+  </div>
+</div>
+
+<div id="rotate">Rotate your phone for a bigger board</div>
+<div id="hint" class="hidden"></div>
+<div id="toast"></div>
+<noscript><p style="position:fixed;inset:0;display:grid;place-items:center">Orbital needs JavaScript.</p></noscript>
+
+<script src="core.js"></script>
+<script src="levels.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
